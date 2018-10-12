@@ -1,68 +1,495 @@
-//#define FASTLED_INTERNAL
-#define FASTLED_ALLOW_INTERRUPTS 0
+#ifdef ESP8266
+    #define FASTLED_ALLOW_INTERRUPTS 0
+    #define FASTLED_ESP8266_RAW_PIN_ORDER
 
-// #define RACHEL
-
-#include <Arduino.h>
-#include <FastLED.h>
-
-#ifdef RACHEL
-#define LED_PIN     MOSI
-#define CHIPSET     WS2812B
-#define COLOUR_ORDER BGR
+    #include <ESP8266WiFi.h>
+    #include <DNSServer.h>
+    #include <ArduinoOTA.h>
+    #include <ESP8266WebServer.h>
+ESP8266WebServer server(80);
 #else
-#define CLOCK_PIN   SCK
-#define DATA_PIN    MOSI
-#define CHIPSET     SK9822
-#define COLOUR_ORDER BGR
+    #include <WiFi.h>
+    #include <DNSServer.h>
+    #include <ArduinoOTA.h>
+    #include <WebServer.h>
+WebServer server(80);
 #endif
 
-// #ifdef RACHEL
-// #define NUM_LEDS    130
-// #elif GERTRUDE
-// #define NUM_LEDS    130
-// #elif GERTRUDE
-// #define NUM_LEDS    130
-// #elif GERTRUDE
-// #define NUM_LEDS    130
-// #elif GERTRUDE
-// #define NUM_LEDS    130
-// #elif GERTRUDE
-// #define NUM_LEDS    130
-// #elif GERTRUDE
-// #define NUM_LEDS    130
-// #elif GERTRUDE
-// #define NUM_LEDS    130
-// #elif GERTRUDE
-#define NUM_LEDS    130
-// #endif
+#include <ArduinoOTA.h>
+#include <FastLED.h>
+#include "config.h"
 
-CRGB leds[NUM_LEDS];
-CRGBPalette16 gPal = CRGBPalette16(CRGB::Black, CRGB::Red, CRGB::Green, CRGB::Blue);
+uint8_t gCurrentHair = 0;
+uint8_t gCurrentEye = 0;
+uint8_t gCurrentTail = 0;
+uint8_t gCurrentOverlay = 0;
+uint8_t gHue = 0;   // rotating "base color" used by many of the patterns
+
+CRGB rawleds[NUM_LEDS];
+CRGB right_eye[3];
+CRGB left_eye[3];
+CRGB strip1[STRIP1_LEDS];
+CRGB strip2[STRIP2_LEDS];
+CRGB strip3[STRIP3_LEDS];
+CRGB strip4[STRIP4_LEDS];
+#ifdef STRIP5_LEDS
+CRGB strip5[STRIP5_LEDS];
+#endif
+CRGB tail[16];
+
+IPAddress apIP(10, 10, 10, 10);
+DNSServer dns_server;
 
 void setup() {
-  delay(1000); // sanity delay
+        delay(1000);
 
-  Serial.begin(115200);
+        Serial.begin(115200);
+        Serial.println();
 
-#ifdef RACHEL
-  FastLED.addLeds<CHIPSET, LED_PIN, COLOUR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-#else
-  FastLED.addLeds<CHIPSET, DATA_PIN, CLOCK_PIN, COLOUR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-#endif
-
-  FastLED.setBrightness(40);
-
-  Serial.printf("\nOK %d\n", NUM_LEDS);
+        setup_led();
+        setup_wifi();
+        setup_dns();
+        setup_server();
 }
 
 void loop() {
-  static uint8_t i = 0;
+        ArduinoOTA.handle();
+        dns_server.processNextRequest();
+        server.handleClient();
 
-  // fill_palette(leds, NUM_LEDS, i, 1, gPal, 255, LINEARBLEND);
-  fill_rainbow(leds, NUM_LEDS, i, 255/NUM_LEDS);
-  EVERY_N_MILLISECONDS(20) { i++; }
+        // Call the current pattern and overlay function once, updating the 'leds' array
+        gHairPatterns[gCurrentHair]();
+        gEyePatterns[gCurrentEye]();
+        gTailPatterns[gCurrentTail]();
+        gOverlays[gCurrentOverlay]();
 
-  FastLED.show();
-  FastLED.delay(1000 / 100);
+        // merge CRGB arrays
+        rawleds[0] = right_eye[2];
+        rawleds[1] = right_eye[1];
+        rawleds[2] = right_eye[0];
+        memcpy(rawleds, right_eye, sizeof(right_eye));
+        memcpy(&rawleds[3], left_eye, sizeof(left_eye));
+        memcpy(&rawleds[6], strip1, sizeof(strip1));
+        memcpy(&rawleds[6+STRIP1_LEDS], strip2, sizeof(strip2));
+        memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS], strip3, sizeof(strip3));
+        memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS], strip4, sizeof(strip4));
+#ifdef STRIP5_LEDS
+        memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS], strip5, sizeof(strip5));
+        memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS+STRIP5_LEDS], tail, sizeof(tail));
+#else
+        memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS], tail, sizeof(tail));
+#endif
+
+        // have eyes and tail at full brightness while dimming down the hair
+        fadeToBlackBy(rawleds + 6, NUM_LEDS - 6 - 16, 240);
+
+        // send the 'leds' array out to the actual LED strip
+        FastLED.show();
+        // insert a delay to keep the framerate modest
+        FastLED.delay(1000/fps);
+
+        // do some periodic updates
+        // slowly cycle the "base color" through the rainbow
+        EVERY_N_MILLISECONDS( 1 ) {
+                gHue -= speed;
+        }
+        // return to default pattern and no overlay after a few seconds
+        // EVERY_N_SECONDS( 4 ) { gCurrentHair = DEFAULT_PATTERN; }
+        // EVERY_N_SECONDS( 4 ) { gCurrentOverlay = NO_OVERLAY; }
+}
+
+/*
+    init functions
+ */
+void setup_led() {
+#ifdef ESP8266
+        FastLED.addLeds<CHIPSET, DATA_PIN, COLOR_ORDER>(rawleds, NUM_LEDS);
+#else
+        FastLED.addLeds<CHIPSET, DATA_PIN, CLOCK_PIN, COLOR_ORDER>(rawleds, NUM_LEDS);
+#endif
+        FastLED.setCorrection(TypicalSMD5050);
+        FastLED.setBrightness(brightness);
+        black_hair();
+        black_eyes();
+        black_tail();
+}
+
+void setup_wifi() {
+        Serial.println("Configuring access point...");
+        WiFi.mode(WIFI_AP);
+        WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
+        WiFi.softAP(ssid, password);
+
+        IPAddress myIP = WiFi.softAPIP();
+        Serial.print("IP address:");
+        Serial.println(myIP);
+
+        WiFi.printDiag(Serial);
+
+        // Hostname defaults to esp8266-[ChipID]
+        ArduinoOTA.setHostname(HOSTNAME);
+
+        // Password can be set with it's md5 value as well
+        ArduinoOTA.setPasswordHash(OTA_PASSWORD);
+
+        ArduinoOTA.onStart([]() {
+                String type;
+                if (ArduinoOTA.getCommand() == U_FLASH) {
+                        type = "sketch";
+                } else { // U_SPIFFS
+                        type = "filesystem";
+                }
+
+                // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+                Serial.println("Start updating " + type);
+        });
+        ArduinoOTA.onEnd([]() {
+                Serial.println("\nEnd");
+        });
+        ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+                Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+        });
+        ArduinoOTA.onError([](ota_error_t error) {
+                Serial.printf("Error[%u]: ", error);
+                if (error == OTA_AUTH_ERROR) {
+                        Serial.println("Auth Failed");
+                } else if (error == OTA_BEGIN_ERROR) {
+                        Serial.println("Begin Failed");
+                } else if (error == OTA_CONNECT_ERROR) {
+                        Serial.println("Connect Failed");
+                } else if (error == OTA_RECEIVE_ERROR) {
+                        Serial.println("Receive Failed");
+                } else if (error == OTA_END_ERROR) {
+                        Serial.println("End Failed");
+                }
+        });
+        ArduinoOTA.begin();
+}
+
+void setup_dns() {
+        dns_server.start(DNS_PORT, hostname, apIP);
+}
+
+void setup_server() {
+        server.on("/on", http_on);
+        server.on("/off", http_off);
+        server.on("/hair", http_hair);
+        server.on("/hair/off", http_hair_off);
+        server.on("/hair/white", http_hair_white);
+        server.on("/hair/rainbow", http_hair_rainbow);
+        server.on("/eyes", http_eyes);
+        server.on("/tail", http_tail);
+        server.on("/test", http_test);
+        server.on("/overlay", http_overlay);
+        server.on("/overlay/off", http_overlay_off);
+        server.on("/overlay/glitter", http_overlay_glitter);
+        server.on("/fps", http_fps);
+        server.on("/speed", http_speed);
+        server.on("/brightness", http_brightness);
+        server.on("/huespan", http_hue_span);
+        server.on("/glitter/chance", http_glitter_chance);
+        server.begin();
+        Serial.println("HTTP server started");
+}
+
+/*
+    hair pattern functions
+ */
+void fish_hair() {
+        static uint8_t colour_index = 0;
+        static uint8_t wave_index = 0;
+        static uint8_t num_leds = sizeof(strip1) / sizeof(CRGB);
+#ifdef STRIP5_LEDS
+        static uint8_t last_strip_led = (sizeof(strip5) / sizeof(CRGB)) - 1;
+#else
+        static uint8_t last_strip_led = (sizeof(strip4) / sizeof(CRGB)) - 1;
+#endif
+        static uint8_t dir = 1;
+
+        EVERY_N_MILLISECONDS(255 - speed) {
+
+                // copy previous strip to make pattern move across the strips
+#ifdef STRIP5_LEDS
+                memcpy(strip5, strip4, sizeof(strip5));
+#endif
+                memcpy(strip4, strip3, sizeof(strip4));
+                memcpy(strip3, strip2, sizeof(strip3));
+                memcpy(strip2, strip1, sizeof(strip2));
+
+                // then generate new pattern on first strip
+                for (uint8_t led = 0; led < num_leds; led++) {
+                        strip1[led] = ColorFromPalette(OceanColors_p, colour_index - (led * 2));
+                }
+
+                strip1[wave_index] = ColorFromPalette(OceanColors_p, 255 - colour_index);
+
+                colour_index += 2;
+
+                if (wave_index == last_strip_led) dir = -1;
+                if (wave_index == 0) dir = 1;
+                wave_index += dir;
+        }
+}
+
+void rainbow_hair() {
+        const uint8_t fade = 255 - brightness;
+
+        fill_rainbow(strip1, STRIP1_LEDS, gHue, 255/sizeof(strip1));
+        fill_rainbow(strip2, STRIP2_LEDS, gHue, 255/sizeof(strip2));
+        fadeToBlackBy(strip2, STRIP2_LEDS, fade + 20);
+        fill_rainbow(strip3, STRIP3_LEDS, gHue, 255/sizeof(strip3));
+        fadeToBlackBy(strip3, STRIP3_LEDS, fade + 40);
+        fill_rainbow(strip4, STRIP4_LEDS, gHue, 255/sizeof(strip4));
+        fadeToBlackBy(strip4, STRIP4_LEDS, fade + 60);
+#ifdef STRIP5_LEDS
+        fill_rainbow(strip5, STRIP5_LEDS, gHue, 255/sizeof(strip5));
+        fadeToBlackBy(strip5, STRIP5_LEDS, fade + 80);
+#endif
+}
+
+void black_hair() {
+        fill_solid(strip1, STRIP1_LEDS, CRGB::Black);
+        fill_solid(strip2, STRIP2_LEDS, CRGB::Black);
+        fill_solid(strip3, STRIP3_LEDS, CRGB::Black);
+        fill_solid(strip4, STRIP4_LEDS, CRGB::Black);
+#ifdef STRIP5_LEDS
+        fill_solid(strip5, STRIP5_LEDS, CRGB::Black);
+#endif
+}
+
+void white_hair() {
+        fill_solid(strip1, STRIP1_LEDS, CRGB::White);
+        fill_solid(strip2, STRIP2_LEDS, CRGB::White);
+        fill_solid(strip3, STRIP3_LEDS, CRGB::White);
+        fill_solid(strip4, STRIP4_LEDS, CRGB::White);
+#ifdef STRIP5_LEDS
+        fill_solid(strip5, STRIP5_LEDS, CRGB::White);
+#endif
+}
+
+void test() {
+        static uint8_t led = 0;
+        static uint8_t colour = 0;
+
+        switch(colour) {
+        case 0: { rawleds[led] = CRGB::Red; break; }
+        case 1: { rawleds[led] = CRGB::Green; break; }
+        case 2: { rawleds[led] = CRGB::Blue; break; }
+        }
+
+        colour++;
+        if (colour % 3 == 0) { led++; colour = 0; }
+        if (led >= NUM_LEDS) { led = 0; }
+
+        FastLED.delay(1000 - (1000 * speed/255));
+}
+
+/*
+    eye pattern functions
+ */
+
+void fish_eyes() {
+        static uint8_t i = 0;
+
+        fill_palette(left_eye, 3, i, i+2, OceanColors_p, 255, LINEARBLEND);
+        fill_palette(right_eye, 3, i, i+2, OceanColors_p, 255, LINEARBLEND);
+
+        EVERY_N_MILLISECONDS(300) {
+                i++;
+        }
+}
+
+void white_eyes() {
+        fill_solid(left_eye, 3, CRGB::White);
+        fill_solid(right_eye, 3, CRGB::White);
+}
+
+void blue_eyes() {
+        fill_solid(left_eye, 3, CRGB::Blue);
+        fill_solid(right_eye, 3, CRGB::Blue);
+}
+
+void red_eyes() {
+        fill_solid(left_eye, 3, CRGB::Red);
+        fill_solid(right_eye, 3, CRGB::Red);
+}
+
+void yellow_eyes() {
+        fill_solid(left_eye, 3, CRGB::Yellow);
+        fill_solid(right_eye, 3, CRGB::Yellow);
+}
+
+void green_eyes() {
+        fill_solid(left_eye, 3, CRGB::Green);
+        fill_solid(right_eye, 3, CRGB::Green);
+}
+
+void black_eyes() {
+        fill_solid(left_eye, 3, CRGB::Black);
+        fill_solid(right_eye, 3, CRGB::Black);
+}
+
+/*
+    tail patterns
+ */
+void fish_tail() {
+        static uint8_t index = 96;
+        static uint8_t dir = 1;
+        static uint8_t hue;
+
+        for (uint8_t i = 0; i < 8; i++) {
+                if (index + (i * 16) > 160)
+                        hue = 160;
+
+                tail[i] = CHSV(hue, 255, 255);
+                tail[15-i] = CHSV(hue, 255, 255);
+        }
+
+        EVERY_N_MILLIS(100) {
+                if (index > 160) dir = -1;
+                if (index < 96) dir = 1;
+                index += dir;
+        }
+}
+
+void black_tail() {
+        fill_solid(tail, 8, CRGB::Black);
+}
+
+/*
+    overlay pattern functions
+ */
+void no_overlay() {
+}
+
+void glitter() {
+        if (random8() < chance_of_glitter) {
+                rawleds[ random16(NUM_LEDS) ] += CRGB::White;
+        }
+}
+
+/*
+    HTTP endpoint functions
+ */
+void http_on() {
+        gCurrentHair = FISH_HAIR;
+        gCurrentOverlay = NO_OVERLAY;
+        speed = 1;
+        hue_span = NUM_LEDS;
+        gHue = 0;
+        server.send(200, "application/json", "{ \"state\": true }");
+}
+
+void http_off() {
+        gCurrentHair = BLACK_HAIR;
+        gCurrentOverlay = NO_OVERLAY;
+        server.send(200, "application/json", "{ \"state\": false }");
+}
+
+void http_brightness() {
+        // grab brightness from GET /brightness&value=<0-255>
+        brightness = server.arg("value").toInt();
+
+        if (brightness >= 0 || brightness <= 255) {
+                FastLED.setBrightness(brightness);
+                server.send(200, "application/json", "{ \"brightness\": " + String(brightness) + " }");
+        }
+}
+
+void http_fps() {
+        // grab fps from GET /fps&value=<1-255>
+        fps = server.arg("value").toInt();
+        if (fps == 0) { fps = 1; }
+        server.send(200, "application/json", "{ \"fps\": " + String(fps) + " }");
+}
+
+void http_speed() {
+        // grab speed from GET /speed&value=<1-255>
+        speed = server.arg("value").toInt();
+        if (speed == 0) { speed = 1; }
+        server.send(200, "application/json", "{ \"speed\": " + String(speed) + " }");
+}
+
+void http_hue_span() {
+        // grab huespan from GET /huespan&value=<1-255>
+        hue_span = server.arg("value").toInt();
+        if (hue_span == 0) { hue_span = 1; }
+        server.send(200, "application/json", "{ \"hue_pan\": " + String(hue_span) + " }");
+}
+
+void http_glitter_chance() {
+        // grab value from GET /glitter/chance&value=<1-255>
+        chance_of_glitter = server.arg("value").toInt();
+        server.send(200, "application/json", "{ \"chance_of_glitter\": " + String(chance_of_glitter) + " }");
+}
+
+void http_hair() {
+        gCurrentHair = server.arg("value").toInt();
+        server.send(200, "application/json", "{ \"hair_pattern\": " + String(gCurrentHair) + " }");
+}
+
+void http_eyes() {
+        gCurrentEye = server.arg("value").toInt();
+        server.send(200, "application/json", "{ \"eye_pattern\": " + String(gCurrentEye) + " }");
+}
+
+void http_tail() {
+        gCurrentTail = server.arg("value").toInt();
+        server.send(200, "application/json", "{ \"tail_pattern\": " + String(gCurrentTail) + " }");
+}
+
+void http_hair_off() {
+        gCurrentHair = BLACK_HAIR;
+        server.send(200, "application/json", "{ \"hair_pattern\": \"off\" }");
+}
+
+void http_hair_rainbow() {
+        gCurrentHair = RAINBOW_HAIR;
+        server.send(200, "application/json", "{ \"hair_pattern\": \"rainbow\" }");
+}
+
+void http_hair_white() {
+        gCurrentHair = WHITE_HAIR;
+        server.send(200, "application/json", "{ \"hair_pattern\": \"white\" }");
+}
+
+void http_test() {
+        gCurrentHair = TEST_HAIR;
+        server.send(200, "application/json", "{ \"hair_pattern\": \"test\" }");
+}
+
+void http_overlay() {
+        gCurrentOverlay = server.arg("value").toInt();
+        server.send(200, "application/json", "{ \"overlay\": " + String(gCurrentOverlay) + " }");
+}
+
+void http_overlay_off() {
+        gCurrentOverlay = NO_OVERLAY;
+        server.send(200, "application/json", "{ \"overlay\": \"off\" }");
+}
+
+void http_overlay_glitter() {
+        gCurrentOverlay = GLITTER_OVERLAY;
+        server.send(200, "application/json", "{ \"overlay\": \"glitter\" }");
+}
+
+/*
+    helper functions
+ */
+void fill_rainbow_virtual(
+        struct CRGB * p_first_led,
+        int num_leds,
+        const int *virtual_leds,
+        uint8_t initial_hue,
+        uint8_t delta_hue
+        ) {
+        CHSV hsv;
+        hsv.hue = initial_hue;
+        hsv.val = 255;
+        hsv.sat = 240;
+        for (int i = 0; i < num_leds; i++) {
+                int virtual_led = virtual_leds[i];
+                p_first_led[virtual_led] = hsv;
+                hsv.hue += delta_hue;
+        }
 }
