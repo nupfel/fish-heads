@@ -7,6 +7,7 @@ mkdir ./build
 
 for fish in $FISH_LIST
 do
+    echo
     echo "################"
     echo "catching $fish"
     echo "################"
