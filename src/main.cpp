@@ -103,7 +103,7 @@ void loop() {
  */
 void setup_led() {
 #ifdef ESP8266
-        FastLED.addLeds<CHIPSET, DATA_PIN, COLOR_ORDER>(rawleds, NUM_LEDS);
+        FastLED.addLeds<CHIPSET, DATA_PIN>(rawleds, NUM_LEDS);
 #else
         FastLED.addLeds<CHIPSET, DATA_PIN, CLOCK_PIN, COLOR_ORDER>(rawleds, NUM_LEDS);
 #endif

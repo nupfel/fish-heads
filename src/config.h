@@ -71,8 +71,8 @@
 #endif
 
 #ifdef ESP8266
-#define DATA_PIN  D6
-#define CHIPSET   WS2812B
+#define DATA_PIN  D1
+#define CHIPSET   NEOPIXEL
 #else
 #define DATA_PIN  MOSI
 #define CLOCK_PIN SCK
