@@ -9,6 +9,7 @@
 #define STRIP3_LEDS 23
 #define STRIP4_LEDS 18
 #define STRIP5_LEDS 13
+#define TAIL_LEDS   16
 #elif defined(ROSIE)
 #define HOSTNAME   "rosie.fish"
 #define NUM_LEDS    132

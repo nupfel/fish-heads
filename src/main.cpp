@@ -21,7 +21,9 @@ WebServer server(80);
 
 uint8_t gCurrentHair = 0;
 uint8_t gCurrentEye = 0;
+#ifdef TAIL_LEDS
 uint8_t gCurrentTail = 0;
+#endif
 uint8_t gCurrentOverlay = 0;
 uint8_t gHue = 0;   // rotating "base color" used by many of the patterns
 
@@ -35,7 +37,9 @@ CRGB strip4[STRIP4_LEDS];
 #ifdef STRIP5_LEDS
 CRGB strip5[STRIP5_LEDS];
 #endif
-CRGB tail[16];
+#ifdef TAIL_LEDS
+CRGB tail[TAIL_LEDS];
+#endif
 
 IPAddress apIP(10, 10, 10, 10);
 DNSServer dns_server;
@@ -60,14 +64,16 @@ void loop() {
         // Call the current pattern and overlay function once, updating the 'leds' array
         gHairPatterns[gCurrentHair]();
         gEyePatterns[gCurrentEye]();
+#ifdef TAIL_LEDS
         gTailPatterns[gCurrentTail]();
+#endif
         gOverlays[gCurrentOverlay]();
 
         // merge CRGB arrays
         rawleds[0] = right_eye[2];
         rawleds[1] = right_eye[1];
         rawleds[2] = right_eye[0];
-        memcpy(rawleds, right_eye, sizeof(right_eye));
+        // memcpy(rawleds, right_eye, sizeof(right_eye));
         memcpy(&rawleds[3], left_eye, sizeof(left_eye));
         memcpy(&rawleds[6], strip1, sizeof(strip1));
         memcpy(&rawleds[6+STRIP1_LEDS], strip2, sizeof(strip2));
@@ -75,13 +81,21 @@ void loop() {
         memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS], strip4, sizeof(strip4));
 #ifdef STRIP5_LEDS
         memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS], strip5, sizeof(strip5));
+#ifdef TAIL_LEDS
         memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS+STRIP5_LEDS], tail, sizeof(tail));
+#endif
 #else
+#ifdef TAIL_LEDS
         memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS], tail, sizeof(tail));
+#endif
 #endif
 
         // have eyes and tail at full brightness while dimming down the hair
-        fadeToBlackBy(rawleds + 6, NUM_LEDS - 6 - 16, 240);
+#ifdef TAIL_LEDS
+        fadeToBlackBy(rawleds + 6, NUM_LEDS - 6 - TAIL_LEDS, 240);
+#else
+        fadeToBlackBy(rawleds + 6, NUM_LEDS - 6, 240);
+#endif
 
         // send the 'leds' array out to the actual LED strip
         FastLED.show();
@@ -178,7 +192,9 @@ void setup_server() {
         server.on("/hair/white", http_hair_white);
         server.on("/hair/rainbow", http_hair_rainbow);
         server.on("/eyes", http_eyes);
+#ifdef TAIL_LEDS
         server.on("/tail", http_tail);
+#endif
         server.on("/test", http_test);
         server.on("/overlay", http_overlay);
         server.on("/overlay/off", http_overlay_off);
@@ -333,6 +349,7 @@ void black_eyes() {
     tail patterns
  */
 void fish_tail() {
+#ifdef TAIL_LEDS
         static uint8_t index = 96;
         static uint8_t dir = 1;
         static uint8_t hue;
@@ -350,10 +367,13 @@ void fish_tail() {
                 if (index < 96) dir = 1;
                 index += dir;
         }
+#endif
 }
 
 void black_tail() {
+#ifdef TAIL_LEDS
         fill_solid(tail, 8, CRGB::Black);
+#endif
 }
 
 /*
@@ -433,10 +453,12 @@ void http_eyes() {
         server.send(200, "application/json", "{ \"eye_pattern\": " + String(gCurrentEye) + " }");
 }
 
+#ifdef TAIL_LEDS
 void http_tail() {
         gCurrentTail = server.arg("value").toInt();
         server.send(200, "application/json", "{ \"tail_pattern\": " + String(gCurrentTail) + " }");
 }
+#endif
 
 void http_hair_off() {
         gCurrentHair = BLACK_HAIR;
