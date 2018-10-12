@@ -12,7 +12,7 @@
 #define TAIL_LEDS   16
 #elif defined(ROSIE)
 #define HOSTNAME   "rosie.fish"
-#define NUM_LEDS    132
+#define NUM_LEDS    116
 #define STRIP1_LEDS 27
 #define STRIP2_LEDS 34
 #define STRIP3_LEDS 23
@@ -20,7 +20,7 @@
 #define STRIP5_LEDS 11
 #elif defined(RONIN)
 #define HOSTNAME   "ronin.fish"
-#define NUM_LEDS    136
+#define NUM_LEDS    120
 #define STRIP1_LEDS 30
 #define STRIP2_LEDS 26
 #define STRIP3_LEDS 26
@@ -28,14 +28,14 @@
 #define STRIP5_LEDS 14
 #elif defined(GERTRUDE)
 #define HOSTNAME   "gertrude.fish"
-#define NUM_LEDS    98
+#define NUM_LEDS    82
 #define STRIP1_LEDS 25
 #define STRIP2_LEDS 22
 #define STRIP3_LEDS 17
 #define STRIP4_LEDS 12
 #elif defined(GREG)
 #define HOSTNAME   "greg.fish"
-#define NUM_LEDS    1
+#define NUM_LEDS    11
 #define STRIP1_LEDS 1
 #define STRIP2_LEDS 1
 #define STRIP3_LEDS 1
@@ -43,28 +43,28 @@
 #define STRIP5_LEDS 1
 #elif defined(GORDON)
 #define HOSTNAME   "gordon.fish"
-#define NUM_LEDS    124
+#define NUM_LEDS    108
 #define STRIP1_LEDS 29
 #define STRIP2_LEDS 28
 #define STRIP3_LEDS 25
 #define STRIP4_LEDS 20
 #elif defined(YAMES)
 #define HOSTNAME   "yames.fish"
-#define NUM_LEDS    113
+#define NUM_LEDS    97
 #define STRIP1_LEDS 29
 #define STRIP2_LEDS 24
 #define STRIP3_LEDS 22
 #define STRIP4_LEDS 16
 #elif defined(YASMIN)
 #define HOSTNAME   "yasmin.fish"
-#define NUM_LEDS    120
+#define NUM_LEDS    104
 #define STRIP1_LEDS 30
 #define STRIP2_LEDS 26
 #define STRIP3_LEDS 24
 #define STRIP4_LEDS 18
 #elif defined(YOLANDA)
 #define HOSTNAME   "yolanda.fish"
-#define NUM_LEDS    108
+#define NUM_LEDS    92
 #define STRIP1_LEDS 31
 #define STRIP2_LEDS 25
 #define STRIP3_LEDS 17
