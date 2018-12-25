@@ -53,9 +53,9 @@ void loop() {
         // Call the current pattern and overlay function once, updating the 'leds' array
         gHairPatterns[gCurrentHair]();
         gEyePatterns[gCurrentEye]();
-#ifdef TAIL_LEDS
+    #ifdef TAIL_LEDS
         gTailPatterns[gCurrentTail]();
-#endif
+    #endif
         gOverlays[gCurrentOverlay]();
 
         // merge CRGB arrays
@@ -68,23 +68,23 @@ void loop() {
         memcpy(&rawleds[6+STRIP1_LEDS], strip2, sizeof(strip2));
         memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS], strip3, sizeof(strip3));
         memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS], strip4, sizeof(strip4));
-#ifdef STRIP5_LEDS
+    #ifdef STRIP5_LEDS
         memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS], strip5, sizeof(strip5));
-#ifdef TAIL_LEDS
+    #ifdef TAIL_LEDS
         memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS+STRIP5_LEDS], tail, sizeof(tail));
-#endif
-#else
-#ifdef TAIL_LEDS
+    #endif
+    #else
+    #ifdef TAIL_LEDS
         memcpy(&rawleds[6+STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS], tail, sizeof(tail));
-#endif
-#endif
+    #endif
+    #endif
 
         // have eyes and tail at full brightness while dimming down the hair
-#ifdef TAIL_LEDS
+    #ifdef TAIL_LEDS
         fadeToBlackBy(rawleds + 6, NUM_LEDS - 6 - TAIL_LEDS, 240);
-#else
+    #else
         fadeToBlackBy(rawleds + 6, NUM_LEDS - 6, 240);
-#endif
+    #endif
 
         // send the 'leds' array out to the actual LED strip
         FastLED.show();
@@ -121,7 +121,7 @@ void setup_wifi() {
         Serial.println("Configuring access point...");
         WiFi.mode(WIFI_AP);
         WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-        WiFi.softAP(ssid, password);
+        WiFi.softAP(ssid, password, CHANNEL);
 
         IPAddress myIP = WiFi.softAPIP();
         Serial.print("IP address:");
@@ -181,9 +181,9 @@ void setup_server() {
         server.on("/hair/white", http_hair_white);
         server.on("/hair/rainbow", http_hair_rainbow);
         server.on("/eyes", http_eyes);
-#ifdef TAIL_LEDS
+    #ifdef TAIL_LEDS
         server.on("/tail", http_tail);
-#endif
+    #endif
         server.on("/test", http_test);
         server.on("/overlay", http_overlay);
         server.on("/overlay/off", http_overlay_off);
@@ -343,12 +343,12 @@ void fish_tail() {
         static uint8_t dir = 1;
         static uint8_t hue;
 
-        for (uint8_t i = 0; i < 8; i++) {
-                if (index + (i * 16) > 160)
+        for (uint8_t i = 0; i < (TAIL_LEDS / 2); i++) {
+                if (index + (i * TAIL_LEDS) > 160)
                         hue = 160;
 
                 tail[i] = CHSV(hue, 255, 255);
-                tail[15-i] = CHSV(hue, 255, 255);
+                tail[TAIL_LEDS-1-i] = CHSV(hue, 255, 255);
         }
 
         EVERY_N_MILLIS(100) {
@@ -361,7 +361,7 @@ void fish_tail() {
 
 void black_tail() {
 #ifdef TAIL_LEDS
-        fill_solid(tail, 8, CRGB::Black);
+        fill_solid(tail, TAIL_LEDS, CRGB::Black);
 #endif
 }
 
