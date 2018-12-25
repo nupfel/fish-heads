@@ -13,12 +13,6 @@ do
     echo "################"
 
     echo "#define $fish" > ./src/fish.h &&
-    if [ "$fish" == "RACHEL" ]
-    then
-        pio run -e nodemcuv2 &&
-        cp -v ./.pioenvs/nodemcuv2/firmware.bin ./build/${fish}.bin
-    else
-        pio run -e lolin32 &&
-        cp -v ./.pioenvs/lolin32/firmware.bin ./build/${fish}.bin
-    fi
+    pio run -e lolin32 &&
+    cp -v ./.pioenvs/lolin32/firmware.bin ./build/${fish}.bin
 done

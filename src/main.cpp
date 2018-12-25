@@ -1,23 +1,12 @@
-#ifdef ESP8266
-    #define FASTLED_ALLOW_INTERRUPTS 0
-    #define FASTLED_ESP8266_RAW_PIN_ORDER
-
-    #include <ESP8266WiFi.h>
-    #include <DNSServer.h>
-    #include <ArduinoOTA.h>
-    #include <ESP8266WebServer.h>
-ESP8266WebServer server(80);
-#else
-    #include <WiFi.h>
-    #include <DNSServer.h>
-    #include <ArduinoOTA.h>
-    #include <WebServer.h>
-WebServer server(80);
-#endif
-
+#include <WiFi.h>
+#include <DNSServer.h>
+#include <ArduinoOTA.h>
+#include <WebServer.h>
 #include <ArduinoOTA.h>
 #include <FastLED.h>
 #include "config.h"
+
+WebServer server(80);
 
 uint8_t gCurrentHair = 0;
 uint8_t gCurrentEye = 0;
@@ -116,11 +105,11 @@ void loop() {
     init functions
  */
 void setup_led() {
-#ifdef ESP8266
+    #ifdef RACHEL
         FastLED.addLeds<CHIPSET, DATA_PIN>(rawleds, NUM_LEDS);
-#else
+    #else
         FastLED.addLeds<CHIPSET, DATA_PIN, CLOCK_PIN, COLOR_ORDER>(rawleds, NUM_LEDS);
-#endif
+    #endif
         FastLED.setCorrection(TypicalSMD5050);
         FastLED.setBrightness(brightness);
         black_hair();
@@ -140,7 +129,7 @@ void setup_wifi() {
 
         WiFi.printDiag(Serial);
 
-        // Hostname defaults to esp8266-[ChipID]
+        // Hostname defaults to ESP-[ChipID]
         ArduinoOTA.setHostname(HOSTNAME);
 
         // Password can be set with it's md5 value as well

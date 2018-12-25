@@ -64,22 +64,22 @@
 #define STRIP4_LEDS 18
 #elif defined(YOLANDA)
 #define HOSTNAME   "yolanda.fish"
-#define NUM_LEDS    92
+#define CHANNEL     9
+#define NUM_LEDS    91
 #define STRIP1_LEDS 31
-#define STRIP2_LEDS 25
+#define STRIP2_LEDS 24
 #define STRIP3_LEDS 17
 #define STRIP4_LEDS 13
 #endif
 
-#ifdef ESP8266
-#define DATA_PIN  D1
+#ifdef RACHEL
 #define CHIPSET   NEOPIXEL
 #else
-#define DATA_PIN  MOSI
 #define CLOCK_PIN SCK
 #define CHIPSET   SK9822
 #endif
 
+#define DATA_PIN  MOSI
 #define COLOR_ORDER BGR
 
 const char *ssid = HOSTNAME;
