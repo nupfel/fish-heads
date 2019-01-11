@@ -8,7 +8,7 @@
 
 WebServer server(80);
 
-uint8_t gCurrentHair = 0;
+uint8_t gCurrentHair = 1;
 uint8_t gCurrentEye = 0;
 #ifdef TAIL_LEDS
 uint8_t gCurrentTail = 0;
@@ -381,7 +381,7 @@ void glitter() {
     HTTP endpoint functions
  */
 void http_on() {
-        gCurrentHair = FISH_HAIR;
+        gCurrentHair = RAINBOW_HAIR;
         gCurrentOverlay = NO_OVERLAY;
         speed = 1;
         hue_span = NUM_LEDS;

@@ -96,8 +96,8 @@ const char *hostname = HOSTNAME;
 
 // global brightness, fps, speed, hueSpan, hue and the currentLed
 unsigned int brightness = 255;                        // 0 - 255
-unsigned int fps = 80;                // 1 - 255
-unsigned int speed = 200;             // 1 - 255
+unsigned int fps = 30;                // 1 - 255
+unsigned int speed = 1;               // 1 - 255
 unsigned int hue_span = NUM_LEDS;
 unsigned int chance_of_glitter = 60;
 
