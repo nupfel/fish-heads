@@ -128,6 +128,7 @@ void setup_wifi();
 void setup_dns();
 void setup_server();
 void setup_led();
+void setup_eeprom();
 
 // pattern functions
 void test();

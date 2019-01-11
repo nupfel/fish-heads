@@ -4,6 +4,7 @@
 #include <WebServer.h>
 #include <ArduinoOTA.h>
 #include <FastLED.h>
+#include <EEPROM.h>
 #include "config.h"
 
 WebServer server(80);
@@ -15,6 +16,16 @@ uint8_t gCurrentTail = 0;
 #endif
 uint8_t gCurrentOverlay = 0;
 uint8_t gHue = 0;   // rotating "base color" used by many of the patterns
+
+#define BRIGHTNESS_ADDR 0x0
+#define FPS_ADDR BRIGHTNESS_ADDR + sizeof(brightness)
+#define SPEED_ADDR FPS_ADDR + sizeof(fps)
+#define HAIR_ADDR SPEED_ADDR + sizeof(speed)
+#define EYE_ADDR HAIR_ADDR + sizeof(gCurrentHair)
+#define OVERLAY_ADDR EYE_ADDR + sizeof(gCurrentEye)
+#ifdef TAIL_LEDS
+#define TAIL_ADDR OVERLAY_ADDR + sizeof(gCurrentOverlay)
+#endif
 
 CRGB rawleds[NUM_LEDS];
 CRGB right_eye[3];
@@ -43,6 +54,7 @@ void setup() {
         setup_wifi();
         setup_dns();
         setup_server();
+        setup_eeprom();
 }
 
 void loop() {
@@ -195,6 +207,43 @@ void setup_server() {
         server.on("/glitter/chance", http_glitter_chance);
         server.begin();
         Serial.println("HTTP server started");
+}
+
+void setup_eeprom() {
+        EEPROM.begin(512);
+        Serial.println("EEPROM initialized");
+
+    //     EEPROM.put(BRIGHTNESS_ADDR, brightness);
+    //     EEPROM.put(SPEED_ADDR, speed);
+    //     EEPROM.put(FPS_ADDR, fps);
+    //     EEPROM.put(HAIR_ADDR, gCurrentHair);
+    //     EEPROM.put(EYE_ADDR, gCurrentEye);
+    //     EEPROM.put(OVERLAY_ADDR, gCurrentOverlay);
+    // #ifdef TAIL_LEDS
+    //     EEPROM.put(TAIL_ADDR, gCurrentTail);
+    // #endif
+    //     EEPROM.commit();
+
+        EEPROM.get(BRIGHTNESS_ADDR, brightness);
+        EEPROM.get(SPEED_ADDR, speed);
+        EEPROM.get(FPS_ADDR, fps);
+        EEPROM.get(HAIR_ADDR, gCurrentHair);
+        EEPROM.get(EYE_ADDR, gCurrentEye);
+        EEPROM.get(OVERLAY_ADDR, gCurrentOverlay);
+    #ifdef TAIL_LEDS
+        EEPROM.get(TAIL_ADDR, gCurrentTail);
+    #endif
+
+        Serial.println("read defaults from EEPROM");
+        Serial.println("brightness: " + String(brightness));
+        Serial.println("fps: " + String(fps));
+        Serial.println("speed: " + String(speed));
+        Serial.println("gCurrentHair: " + String(gCurrentHair));
+        Serial.println("gCurrentEye: " + String(gCurrentEye));
+        Serial.println("gCurrentOverlay: " + String(gCurrentOverlay));
+    #ifdef TAIL_LEDS
+        Serial.println("gCurrentTail: " + String(gCurrentTail));
+    #endif
 }
 
 /*
@@ -401,6 +450,8 @@ void http_brightness() {
 
         if (brightness >= 0 || brightness <= 255) {
                 FastLED.setBrightness(brightness);
+                EEPROM.put(BRIGHTNESS_ADDR, brightness);
+                EEPROM.commit();
                 server.send(200, "application/json", "{ \"brightness\": " + String(brightness) + " }");
         }
 }
@@ -409,6 +460,8 @@ void http_fps() {
         // grab fps from GET /fps&value=<1-255>
         fps = server.arg("value").toInt();
         if (fps == 0) { fps = 1; }
+        EEPROM.put(FPS_ADDR, fps);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"fps\": " + String(fps) + " }");
 }
 
@@ -416,6 +469,8 @@ void http_speed() {
         // grab speed from GET /speed&value=<1-255>
         speed = server.arg("value").toInt();
         if (speed == 0) { speed = 1; }
+        EEPROM.put(SPEED_ADDR, speed);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"speed\": " + String(speed) + " }");
 }
 
@@ -434,53 +489,73 @@ void http_glitter_chance() {
 
 void http_hair() {
         gCurrentHair = server.arg("value").toInt();
+        EEPROM.put(HAIR_ADDR, gCurrentHair);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"hair_pattern\": " + String(gCurrentHair) + " }");
 }
 
 void http_eyes() {
         gCurrentEye = server.arg("value").toInt();
+        EEPROM.put(EYE_ADDR, gCurrentEye);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"eye_pattern\": " + String(gCurrentEye) + " }");
 }
 
 #ifdef TAIL_LEDS
 void http_tail() {
         gCurrentTail = server.arg("value").toInt();
+        EEPROM.put(TAIL_ADDR, gCurrentTail);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"tail_pattern\": " + String(gCurrentTail) + " }");
 }
 #endif
 
 void http_hair_off() {
         gCurrentHair = BLACK_HAIR;
+        EEPROM.put(HAIR_ADDR, gCurrentHair);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"hair_pattern\": \"off\" }");
 }
 
 void http_hair_rainbow() {
         gCurrentHair = RAINBOW_HAIR;
+        EEPROM.put(HAIR_ADDR, gCurrentHair);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"hair_pattern\": \"rainbow\" }");
 }
 
 void http_hair_white() {
         gCurrentHair = WHITE_HAIR;
+        EEPROM.put(HAIR_ADDR, gCurrentHair);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"hair_pattern\": \"white\" }");
 }
 
 void http_test() {
         gCurrentHair = TEST_HAIR;
+        EEPROM.put(HAIR_ADDR, gCurrentHair);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"hair_pattern\": \"test\" }");
 }
 
 void http_overlay() {
         gCurrentOverlay = server.arg("value").toInt();
+        EEPROM.put(OVERLAY_ADDR, gCurrentOverlay);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"overlay\": " + String(gCurrentOverlay) + " }");
 }
 
 void http_overlay_off() {
         gCurrentOverlay = NO_OVERLAY;
+        EEPROM.put(OVERLAY_ADDR, gCurrentOverlay);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"overlay\": \"off\" }");
 }
 
 void http_overlay_glitter() {
         gCurrentOverlay = GLITTER_OVERLAY;
+        EEPROM.put(OVERLAY_ADDR, gCurrentOverlay);
+        EEPROM.commit();
         server.send(200, "application/json", "{ \"overlay\": \"glitter\" }");
 }
 
